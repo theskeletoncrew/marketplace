@@ -24,18 +24,6 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
-    // url: 'https://drops.skeletoncrew.rip/#/auction/6979Txui2UodrUjvhdYoSquAdCq4cpdMevanNC2fVKST',
-    url: 'https://drops.skeletoncrew.rip/#/auction/H7m3bGpnSqDyyTv2nLMxCCxpDGmJBC7JcMxnD5HVvUYt',
-    title: 'Cable Manager',
-    artist: 'SIMPLE MONSTER PARTY',
-    image:
-      'https://assets2.holaplex.tools/arweave/5Kykvt3Rl_ug_mUuqhIawCG8x-1W_Cz9dzZ89qI__Bc?width=400',
-    startDate: new Date('2022-04-27T12:00:00-04:00'),
-    tokenType: DropToken.SKULL,
-    quantity: 33,
-    dropType: DropType.FIXED_PRICE,
-  },
-  {
     // url: 'https://drops.skeletoncrew.rip/#/auction/7HrbMuUg1J1afD5XVzXtnFjrWDo4RqvXipWrqs5TFgDM',
     url: 'https://drops.skeletoncrew.rip/#/auction/7PhpJXk4HTiVGJnVo8vxAz2cdichR1bCz12JEkp1WL45',
     title: 'Tiger of Eden',
@@ -164,6 +152,19 @@ export const drops: Drop[] = [
     tokenType: DropToken.SOL,
     quantity: 1,
     dropType: DropType.AUCTION,
+    isSoldOut: true,
+  },
+  {
+    // url: 'https://drops.skeletoncrew.rip/#/auction/6979Txui2UodrUjvhdYoSquAdCq4cpdMevanNC2fVKST',
+    url: 'https://drops.skeletoncrew.rip/#/auction/H7m3bGpnSqDyyTv2nLMxCCxpDGmJBC7JcMxnD5HVvUYt',
+    title: 'Cable Manager',
+    artist: 'SIMPLE MONSTER PARTY',
+    image:
+      'https://assets2.holaplex.tools/arweave/5Kykvt3Rl_ug_mUuqhIawCG8x-1W_Cz9dzZ89qI__Bc?width=400',
+    startDate: new Date('2022-04-27T12:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 33,
+    dropType: DropType.FIXED_PRICE,
     isSoldOut: true,
   },
 ]
