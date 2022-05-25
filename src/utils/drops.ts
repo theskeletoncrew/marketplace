@@ -24,17 +24,6 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
-    url: 'https://raffles.skeletoncrew.rip/raffles/7xDXyg3sifaCqXbFBepJ53nDMbpHMAPA85brFhCawqWq',
-    title: 'Too Many',
-    artist: 'NASHOTOBI',
-    image:
-      'https://assets2.holaplex.tools/arweave/5mitvw1lEsB7rgYMFRbmZJbETTPME2M60bNP6gaBxAQ?width=400',
-    startDate: new Date('2022-05-23T12:00:00-04:00'),
-    tokenType: DropToken.SKULL,
-    quantity: 1,
-    dropType: DropType.RAFFLE,
-  },
-  {
     // url: 'https://drops.skeletoncrew.rip/#/auction/7HrbMuUg1J1afD5XVzXtnFjrWDo4RqvXipWrqs5TFgDM',
     url: 'https://drops.skeletoncrew.rip/#/auction/7PhpJXk4HTiVGJnVo8vxAz2cdichR1bCz12JEkp1WL45',
     title: 'Tiger of Eden',
@@ -56,6 +45,18 @@ export const drops: Drop[] = [
     tokenType: DropToken.SKULL,
     quantity: 33,
     dropType: DropType.FIXED_PRICE,
+  },
+  {
+    url: 'https://raffles.skeletoncrew.rip/raffles/7xDXyg3sifaCqXbFBepJ53nDMbpHMAPA85brFhCawqWq',
+    title: 'Too Many',
+    artist: 'NASHOTOBI',
+    image:
+      'https://assets2.holaplex.tools/arweave/5mitvw1lEsB7rgYMFRbmZJbETTPME2M60bNP6gaBxAQ?width=400',
+    startDate: new Date('2022-05-23T12:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 1,
+    dropType: DropType.RAFFLE,
+    isSoldOut: true,
   },
   {
     url: 'https://drops.skeletoncrew.rip/#/auction/FRkQzNy6iaYNv63zebvX8uqCCHgqeYufcbSthfbQZ2UL',
