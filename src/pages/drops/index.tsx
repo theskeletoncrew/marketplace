@@ -1,38 +1,18 @@
-import { NextPage, NextPageContext } from 'next'
-import { gql, useQuery } from '@apollo/client'
-import { Link } from 'react-router-dom'
+import { NextPageContext } from 'next'
+import { gql } from '@apollo/client'
 import Head from 'next/head'
 import { useWallet } from '@solana/wallet-adapter-react'
-import WalletPortal from '../../components/WalletPortal'
-import {
-  isNil,
-  map,
-  modify,
-  filter,
-  partial,
-  pipe,
-  prop,
-  or,
-  indexOf,
-  isEmpty,
-  not,
-  any,
-  equals,
-  ifElse,
-  always,
-  when,
-  length,
-} from 'ramda'
+import { isNil, isEmpty } from 'ramda'
 import { useRouter } from 'next/router'
 import { AppProps } from 'next/app'
-import { truncateAddress } from '../../modules/address'
 import client from '../../client'
 import { Marketplace } from '../../types.d'
 import { DropCard } from '../../components/DropCard'
 import { drops } from 'src/utils/drops'
-const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
+import { ReactElement } from 'react'
+import { BannerLayout } from 'src/layouts/Banner'
 
-type OptionType = { label: string; value: number }
+const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
 
 interface GetMarketplace {
   marketplace: Marketplace | null
@@ -101,12 +81,12 @@ interface DropsPageProps extends AppProps {
   marketplace: Marketplace
 }
 
-const DropsShow: NextPage<DropsPageProps> = ({ marketplace }) => {
+function DropsShow({ marketplace }: DropsPageProps) {
   const { publicKey } = useWallet()
   const router = useRouter()
 
   return (
-    <div className="flex flex-col items-center text-white bg-gray-900">
+    <>
       <Head>
         <title>Art Drops | Skeleton Crew</title>
         <link rel="icon" href={marketplace.logoUrl} />
@@ -116,38 +96,6 @@ const DropsShow: NextPage<DropsPageProps> = ({ marketplace }) => {
         <meta property="og:image" content={marketplace.bannerUrl} />
         <meta property="og:description" content={marketplace.description} />
       </Head>
-      <div className="relative w-full">
-        <Link to="/" className="absolute top-6 left-6">
-          <button className="flex items-center justify-between gap-2 bg-gray-800 rounded-full align sm:px-4 sm:py-2 sm:h-14 hover:bg-gray-600 transition-transform hover:scale-[1.02]">
-            <img
-              className="object-cover w-12 h-12 rounded-full md:w-8 md:h-8 aspect-square"
-              src={marketplace.logoUrl}
-            />
-            <div className="hidden sm:block">Skeleton Crew</div>
-          </button>
-        </Link>
-        <div className="absolute flex justify-end right-6 top-[28px]">
-          <div className="flex items-center justify-end">
-            {equals(
-              publicKey?.toBase58(),
-              marketplace.auctionHouse.authority
-            ) && (
-              <Link
-                to="/admin/marketplace/edit"
-                className="mr-6 text-sm cursor-pointer hover:underline"
-              >
-                Admin Dashboard
-              </Link>
-            )}
-            <WalletPortal />
-          </div>
-        </div>
-        <img
-          src={marketplace.bannerUrl}
-          alt="Skeleton Crew"
-          className="object-cover w-full h-44 md:h-60"
-        />
-      </div>
       <div className="w-full max-w-[1800px] px-4 sm:px-8">
         <div className="relative grid justify-between w-full grid-cols-12 gap-4 mt-20 mb-10">
           <div className="col-span-12 mb-6 md:col-span-8">
@@ -184,8 +132,20 @@ const DropsShow: NextPage<DropsPageProps> = ({ marketplace }) => {
           </div>
         </div>
       </div>
-    </div>
+    </>
   )
+}
+
+interface DropsLayoutProps {
+  marketplace: Marketplace
+  children: ReactElement
+}
+
+DropsShow.getLayout = function GetLayout({
+  marketplace,
+  children,
+}: DropsLayoutProps) {
+  return <BannerLayout marketplace={marketplace}>{children}</BannerLayout>
 }
 
 export default DropsShow

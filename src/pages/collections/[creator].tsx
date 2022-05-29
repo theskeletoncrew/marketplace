@@ -1,6 +1,7 @@
 import { gql, useQuery, useLazyQuery } from '@apollo/client'
 import { useWallet } from '@solana/wallet-adapter-react'
 import cx from 'classnames'
+import { subDays } from 'date-fns'
 import { NextPage, NextPageContext } from 'next'
 import { AppProps } from 'next/app'
 import Head from 'next/head'
@@ -24,11 +25,13 @@ import {
   prop,
   when,
 } from 'ramda'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, ReactElement } from 'react'
 import { Filter } from 'react-feather'
 import { Controller, useForm } from 'react-hook-form'
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import Select from 'react-select'
+import { toSOL } from './../../modules/lamports'
+import { BannerLayout } from './../../layouts/Banner'
 import {
   truncateAddress,
   collectionNameByAddress,
@@ -43,23 +46,26 @@ import {
   GET_WALLET_COUNTS,
 } from '..'
 import client from '../../client'
-import Button, { ButtonSize } from '../../components/Button'
+import Button, { ButtonSize, ButtonType } from '../../components/Button'
 import { List } from '../../components/List'
 import { NftCard } from '../../components/NftCard'
-import WalletPortal from '../../components/WalletPortal'
 import { useSidebar } from '../../hooks/sidebar'
-import { toSOL } from '../../modules/lamports'
+import Chart from './../../components/Chart'
 import {
   AttributeFilter,
   Creator,
   Marketplace,
   Nft,
   PresetNftFilter,
+  PriceChart,
 } from '../../types.d'
 import { ADDRESSES } from '../../utils/utilities'
+
 const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
 
-type OptionType = { label: string; value: number }
+type OptionType = { label: string; value: string }
+type OptionsType = Array<OptionType>
+type ValueType = OptionType | OptionsType | null | void
 
 interface GetNftsData {
   nfts: Nft[]
@@ -80,8 +86,8 @@ const GET_NFTS = gql`
     nfts(
       creators: $creators
       owners: $owners
-      listed: $listed
       auctionHouses: $auctionHouses
+      listed: $listed
       offerers: $offerers
       limit: $limit
       offset: $offset
@@ -142,6 +148,27 @@ const GET_COLLECTION_INFO = gql`
   }
 `
 
+export const GET_PRICE_CHART_DATA = gql`
+  query GetPriceChartData(
+    $auctionHouses: [PublicKey!]!
+    $creators: [PublicKey!]!
+    $startDate: DateTimeUtc!
+    $endDate: DateTimeUtc!
+  ) {
+    charts(
+      auctionHouses: $auctionHouses
+      creators: $creators
+      startDate: $startDate
+      endDate: $endDate
+    ) {
+      salesAverage {
+        price
+        date
+      }
+    }
+  }
+`
+
 export async function getServerSideProps({ req, query }: NextPageContext) {
   const subdomain = req?.headers['x-holaplex-subdomain']
 
@@ -193,12 +220,14 @@ export async function getServerSideProps({ req, query }: NextPageContext) {
   if (
     or(
       any(isNil)([marketplace, creator]),
-      creator?.address == ADDRESSES.DUPLICATE_COLLECTION,
-      pipe(
-        map(prop('creatorAddress')),
-        indexOf(query.creator),
-        equals(-1)
-      )(marketplace?.creators || [])
+      or(
+        creator?.address == ADDRESSES.DUPLICATE_COLLECTION,
+        pipe(
+          map(prop('creatorAddress')),
+          indexOf(query.creator),
+          equals(-1)
+        )(marketplace?.creators || [])
+      )
     )
   ) {
     return {
@@ -233,9 +262,18 @@ interface NftFilterForm {
   preset: PresetNftFilter
 }
 
-const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
-  const { publicKey, connected } = useWallet()
+export interface GetPriceChartData {
+  charts: PriceChart
+}
+
+const startDate = subDays(new Date(), 6).toISOString()
+const endDate = new Date().toISOString()
+
+function CreatorShow({ marketplace, creator }: CreatorPageProps) {
+  const wallet = useWallet()
+  const { publicKey, connected } = wallet
   const [hasMore, setHasMore] = useState(true)
+  const { sidebarOpen, toggleSidebar } = useSidebar()
   const router = useRouter()
   const {
     data,
@@ -279,7 +317,18 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
     }
   )
 
-  const { sidebarOpen, toggleSidebar } = useSidebar()
+  const priceChartDataQuery = useQuery<GetPriceChartData>(
+    GET_PRICE_CHART_DATA,
+    {
+      fetchPolicy: 'network-only',
+      variables: {
+        auctionHouses: [marketplace.auctionHouse.address],
+        creators: [router.query.creator],
+        startDate: startDate,
+        endDate: endDate,
+      },
+    }
+  )
 
   const { control, watch } = useForm<NftFilterForm>({
     defaultValues: { preset: PresetNftFilter.All },
@@ -320,11 +369,12 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
       const listed = ifElse(
         equals(PresetNftFilter.Listed),
         always(true),
-        always(false)
+        always(null)
       )(preset as PresetNftFilter)
 
       refetch({
         creators: [router.query.creator],
+        auctionHouses: [marketplace.auctionHouse.address],
         attributes: nextAttributes,
         owners,
         offerers,
@@ -345,15 +395,11 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
     creator,
   ])
 
-  const moonrank = moonrankJSONByAddress(router.query?.creator)
-  const howrareis = howrareisJSONByAddress(router.query?.creator)
+  const moonrank = moonrankJSONByAddress(router.query?.creator as string)
+  const howrareis = howrareisJSONByAddress(router.query?.creator as string)
 
   return (
-    <div
-      className={cx('flex flex-col items-center text-white bg-gray-900', {
-        'overflow-hidden': sidebarOpen,
-      })}
-    >
+    <>
       <Head>
         <title>
           {truncateAddress(router.query?.creator as string)} NFT Collection |{' '}
@@ -364,48 +410,13 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
         <meta property="og:site_name" content={marketplace.name} />
         <meta
           property="og:title"
-          content={
-            truncateAddress(router.query?.creator as string) +
-            ' NFT Collection ' +
-            ' | ' +
-            marketplace.name
-          }
+          content={`${truncateAddress(
+            router.query?.creator as string
+          )} NFT Collection | ${marketplace.name}`}
         />
         <meta property="og:image" content={marketplace.bannerUrl} />
         <meta property="og:description" content={marketplace.description} />
       </Head>
-      <div className="relative w-full">
-        <Link to="/" className="absolute top-6 left-6">
-          <button className="flex items-center justify-between gap-2 bg-gray-800 rounded-full align sm:px-4 sm:py-2 sm:h-14 hover:bg-gray-600 transition-transform hover:scale-[1.02]">
-            <img
-              className="object-cover w-12 h-12 rounded-full md:w-8 md:h-8 aspect-square"
-              src={marketplace.logoUrl}
-            />
-            <div className="hidden sm:block">{marketplace.name}</div>
-          </button>
-        </Link>
-        <div className="absolute flex justify-end right-6 top-[28px]">
-          <div className="flex items-center justify-end">
-            {equals(
-              publicKey?.toBase58(),
-              marketplace.auctionHouse.authority
-            ) && (
-              <Link
-                to="/admin/marketplace/edit"
-                className="mr-6 text-sm cursor-pointer hover:underline"
-              >
-                Admin Dashboard
-              </Link>
-            )}
-            <WalletPortal />
-          </div>
-        </div>
-        <img
-          src={marketplace.bannerUrl}
-          alt={marketplace.name}
-          className="object-cover w-full h-44 md:h-60"
-        />
-      </div>
       <div className="w-full max-w-[1800px] px-4 sm:px-8">
         <div className="relative grid justify-between w-full grid-cols-12 gap-4 mt-20 mb-10">
           <div className="col-span-12 mb-6 md:col-span-8">
@@ -416,9 +427,11 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
             />
             <h2 className="text-xl text-gray-300">{marketplace.name}</h2>
             <h1 className="mb-4">
-              {collectionNameByAddress(router.query?.creator)}
+              {collectionNameByAddress(router.query?.creator as string)}
             </h1>
-            <p>{collectionDescriptionByAddress(router.query?.creator)}</p>
+            <p>
+              {collectionDescriptionByAddress(router.query?.creator as string)}
+            </p>
           </div>
           <div className="grid grid-cols-2 col-span-12 gap-4 md:col-span-4 md:-mt-8">
             <div>
@@ -517,8 +530,8 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
                           <input
                             onChange={onChange}
                             className="mr-3 appearance-none rounded-full h-3 w-3 
-                              border border-gray-100 bg-gray-700 
-                              checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                border border-gray-100 bg-gray-700 
+                                checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                             type="radio"
                             name="preset"
                             disabled={loading}
@@ -527,7 +540,6 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
                             id="preset-all"
                             checked={value === PresetNftFilter.All}
                           />
-
                           {loading ? (
                             <div className="h-6 w-full" />
                           ) : (
@@ -559,8 +571,8 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
                           <input
                             onChange={onChange}
                             className="mr-3 appearance-none rounded-full h-3 w-3 
-                              border border-gray-100 bg-gray-700 
-                              checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                border border-gray-100 bg-gray-700 
+                                checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                             disabled={loading}
                             hidden={loading}
                             type="radio"
@@ -601,8 +613,8 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
                               <input
                                 onChange={onChange}
                                 className="mr-3 appearance-none rounded-full h-3 w-3 
-                                  border border-gray-100 bg-gray-700 
-                                  checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                    border border-gray-100 bg-gray-700 
+                                    checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                                 type="radio"
                                 name="preset"
                                 disabled={loading}
@@ -644,8 +656,8 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
                               <input
                                 onChange={onChange}
                                 className="mr-3 appearance-none rounded-full h-3 w-3 
-                                  border border-gray-100 bg-gray-700 
-                                  checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                    border border-gray-100 bg-gray-700 
+                                    checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                                 disabled={loading}
                                 hidden={loading}
                                 type="radio"
@@ -765,34 +777,52 @@ const CreatorShow: NextPage<CreatorPageProps> = ({ marketplace, creator }) => {
               }
               itemRender={(nft) => {
                 return (
-                  <Link to={`/nfts/${nft.address}`} key={nft.address}>
-                    <NftCard
-                      nft={nft}
-                      marketplace={marketplace}
-                      moonrank={
-                        (moonrank && moonrank[nft.mintAddress]) || undefined
-                      }
-                      howrareis={
-                        (howrareis && howrareis[nft.mintAddress]) || undefined
-                      }
-                    />
+                  <Link
+                    href={`/nfts/${nft.address}`}
+                    key={nft.address}
+                    passHref
+                  >
+                    <a>
+                      <NftCard
+                        nft={nft}
+                        marketplace={marketplace}
+                        moonrank={
+                          (moonrank && moonrank[nft.mintAddress]) || undefined
+                        }
+                        howrareis={
+                          (howrareis && howrareis[nft.mintAddress]) || undefined
+                        }
+                      />
+                    </a>
                   </Link>
                 )
               }}
             />
           </div>
         </div>
+        <Button
+          size={ButtonSize.Small}
+          icon={<Filter size={16} className="mr-2" />}
+          className="fixed z-10 bottom-4 md:hidden"
+          onClick={toggleSidebar}
+        >
+          Filter
+        </Button>
       </div>
-      <Button
-        size={ButtonSize.Small}
-        icon={<Filter size={16} className="mr-2" />}
-        className="fixed z-10 bottom-4 md:hidden"
-        onClick={toggleSidebar}
-      >
-        Filter
-      </Button>
-    </div>
+    </>
   )
+}
+
+interface CreatorShowLayoutProps {
+  marketplace: Marketplace
+  children: ReactElement
+}
+
+CreatorShow.getLayout = function GetLayout({
+  marketplace,
+  children,
+}: CreatorShowLayoutProps): ReactElement {
+  return <BannerLayout marketplace={marketplace}>{children}</BannerLayout>
 }
 
 export default CreatorShow

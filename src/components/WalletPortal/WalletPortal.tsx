@@ -44,7 +44,7 @@ const WalletPortal = () => {
   return or(connected, isLoading) ? (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button className="flex items-center justify-between gap-2 bg-gray-800 rounded-full align px-4 py-2 h-14 hover:bg-gray-600">
+        <button className="flex items-center justify-between gap-2 bg-gray-800 rounded-full align px-4 h-[50px] hover:bg-gray-600">
           {not(isLoading) && (
             <p>{truncateAddress(publicKey?.toBase58() as string)}</p>
           )}

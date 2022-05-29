@@ -2,7 +2,6 @@ import { gql, useQuery, useLazyQuery } from '@apollo/client'
 import { useWallet } from '@solana/wallet-adapter-react'
 import cx from 'classnames'
 import { NextPage, NextPageContext } from 'next'
-import { PublicKey } from '@solana/web3.js'
 import { AppProps } from 'next/app'
 import Head from 'next/head'
 import {
@@ -19,21 +18,16 @@ import {
   prop,
   when,
 } from 'ramda'
-import { useEffect, useState } from 'react'
+import React, { ReactElement, ReactNode, useEffect, useState } from 'react'
+import { toSOL } from './../modules/lamports'
 import { Filter } from 'react-feather'
 import { Controller, useForm } from 'react-hook-form'
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import client from '../client'
 import Button, { ButtonSize, ButtonType } from '../components/Button'
-import WalletPortal from '../components/WalletPortal'
-import { Slider } from '../components/Slider'
+import { BannerLayout } from '../layouts/Banner'
 import { useSidebar } from '../hooks/sidebar'
-import {
-  addressAvatar,
-  truncateAddress,
-  collectionNameByAddress,
-} from '../modules/address'
-import { toSOL } from '../modules/lamports'
+import { truncateAddress, collectionNameByAddress } from '../modules/address'
 import {
   AttributeFilter,
   Creator,
@@ -41,16 +35,18 @@ import {
   Nft,
   NftCount,
   PresetNftFilter,
+  PriceChart,
   Wallet,
 } from '../types.d'
 import { List } from './../components/List'
 import { NftCard } from './../components/NftCard'
-import Chart from './../components/Chart'
-import { GetPriceChartData, GET_PRICE_CHART_DATA } from './analytics'
 import { subDays } from 'date-fns'
+import Chart from './../components/Chart'
 
 import { ADDRESSES } from '../utils/utilities'
 import { drops } from '../utils/drops'
+import WalletPortal from 'src/components/WalletPortal'
+
 const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
 
 interface GetNftsData {
@@ -186,6 +182,27 @@ const GET_MARKETPLACE_INFO = gql`
   }
 `
 
+export const GET_PRICE_CHART_DATA = gql`
+  query GetPriceChartData(
+    $auctionHouses: [PublicKey!]!
+    $creators: [PublicKey!]
+    $startDate: DateTimeUtc!
+    $endDate: DateTimeUtc!
+  ) {
+    charts(
+      auctionHouses: $auctionHouses
+      creators: $creators
+      startDate: $startDate
+      endDate: $endDate
+    ) {
+      salesAverage {
+        price
+        date
+      }
+    }
+  }
+`
+
 export async function getServerSideProps({ req }: NextPageContext) {
   const subdomain = req?.headers['x-holaplex-subdomain'] || SUBDOMAIN
 
@@ -266,7 +283,15 @@ interface GetCreatorPreviews {
   marketplace: Marketplace
 }
 
-interface HomePageProps extends AppProps {
+type NextPageWithLayout = NextPage & {
+  getLayout?: (page: ReactElement) => ReactNode
+}
+
+type AppPropsWithLayout = AppProps & {
+  Component: NextPageWithLayout
+}
+
+interface HomePageProps extends AppPropsWithLayout {
   marketplace: Marketplace
 }
 
@@ -275,10 +300,14 @@ interface NftFilterForm {
   preset: PresetNftFilter
 }
 
+export interface GetPriceChartData {
+  charts: PriceChart
+}
+
 const startDate = subDays(new Date(), 6).toISOString()
 const endDate = new Date().toISOString()
 
-const Home: NextPage<HomePageProps> = ({ marketplace }) => {
+function Home({ marketplace }: HomePageProps) {
   const { publicKey, connected } = useWallet()
   const creators = map(prop('creatorAddress'))(marketplace.creators)
   const marketplaceQuery = useQuery<GetMarketplaceInfo>(GET_MARKETPLACE_INFO, {
@@ -327,6 +356,7 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
       fetchPolicy: 'network-only',
       variables: {
         auctionHouses: [marketplace.auctionHouse.address],
+        creators: creators,
         startDate: startDate,
         endDate: endDate,
       },
@@ -366,7 +396,7 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
       const listed = ifElse(
         equals(PresetNftFilter.Listed),
         always(true),
-        always(false)
+        always(null)
       )(preset as PresetNftFilter)
 
       nftsQuery
@@ -404,7 +434,7 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
     priceChartDataQuery.loading
 
   return (
-    <div className="flex flex-col items-center text-white bg-gray-900">
+    <>
       <Head>
         <title>{marketplace.name}</title>
         <link rel="icon" href={marketplace.logoUrl} />
@@ -414,19 +444,17 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
         <meta property="og:image" content={marketplace.bannerUrl} />
         <meta property="og:description" content={marketplace.description} />
       </Head>
-
-      <div className="relative w-full">
+      {/* <div className="relative w-full">
         <div className="absolute flex justify-end right-6 top-[28px]">
           <div className="flex items-center justify-end">
             {equals(
               publicKey?.toBase58(),
               marketplace.auctionHouse.authority
             ) && (
-              <Link
-                to="/admin/marketplace/edit"
-                className="text-sm cursor-pointer mr-6 hover:underline "
-              >
-                Admin Dashboard
+              <Link href="/admin/marketplace/edit" passHref>
+                <a className="text-sm cursor-pointer mr-6 hover:underline ">
+                  Admin Dashboard
+                </a>
               </Link>
             )}
             <WalletPortal />
@@ -437,7 +465,7 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
           alt={marketplace.name}
           className="object-cover w-full h-30 md:h-44 lg:h-60"
         />
-      </div>
+      </div> */}
       <div className="w-full max-w-[1800px] px-4 sm:px-8">
         <div className="relative grid grid-cols-12 gap-4 justify-between w-full mt-20 mb-10">
           <div className="col-span-12 md:col-span-8 mb-6">
@@ -484,17 +512,18 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
                 </span>
               )}
             </div>
-            <Link
-              to="/analytics"
-              className="col-span-1 lg:col-span-2 flex justify-end"
-            >
-              <Button
-                size={ButtonSize.Small}
-                type={ButtonType.Secondary}
-                icon={<img src="/images/analytics_icon.svg" className="mr-2" />}
-              >
-                Details & Activity
-              </Button>
+            <Link href="/analytics" passHref>
+              <a className="col-span-1 lg:col-span-2 flex justify-end">
+                <Button
+                  size={ButtonSize.Small}
+                  type={ButtonType.Secondary}
+                  icon={
+                    <img src="/images/analytics_icon.svg" className="mr-2" />
+                  }
+                >
+                  Details & Activity
+                </Button>
+              </a>
             </Link>
             <div className="col-span-3 lg:col-span-4">
               <div className="flex flex-col w-full">
@@ -537,24 +566,23 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
               </div>
             </>
           ) : (
-            <Link
-              className="transition-transform hover:scale-[1.02]"
-              to={`/drops`}
-            >
-              <div>
-                <div className="flex flex-grid mb-2 rounded-lg overflow-hidden">
-                  {drops.slice(0, 3).map((drop) => {
-                    return (
-                      <img
-                        className="aspect-square object-cover w-1/3"
-                        src={drop.image}
-                        key={drop.url}
-                      />
-                    )
-                  })}
+            <Link href="/drops" passHref>
+              <a className="transition-transform hover:scale-[1.02]">
+                <div>
+                  <div className="flex flex-grid mb-2 rounded-lg overflow-hidden">
+                    {drops.slice(0, 3).map((drop) => {
+                      return (
+                        <img
+                          className="aspect-square object-cover w-1/3"
+                          src={drop.image}
+                          key={drop.url}
+                        />
+                      )
+                    })}
+                  </div>
+                  Limited Edition Auctions, Raffles, and Sales
                 </div>
-                Limited Edition Auctions, Raffles, and Sales
-              </div>
+              </a>
             </Link>
           )}
         </div>
@@ -588,25 +616,27 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
               .map((creator) => {
                 return (
                   <Link
-                    className="transition-transform hover:scale-[1.02]"
                     key={creator.storeConfigAddress}
-                    to={`/collections/${creator.creatorAddress}`}
+                    href={`/collections/${creator.creatorAddress}`}
+                    passHref
                   >
-                    <div>
-                      <div className="flex flex-grid mb-2 rounded-lg overflow-hidden">
-                        {creator.preview.map((nft) => {
-                          return (
-                            <img
-                              className="aspect-square object-cover w-1/3"
-                              src={nft.image}
-                              key={nft.address}
-                            />
-                          )
-                        })}
+                    <a className="transition-transform hover:scale-[1.02]">
+                      <div>
+                        <div className="flex flex-grid mb-2 rounded-lg overflow-hidden">
+                          {creator.preview.map((nft) => {
+                            return (
+                              <img
+                                className="aspect-square object-cover w-1/3"
+                                src={nft.image}
+                                key={nft.address}
+                              />
+                            )
+                          })}
+                        </div>
+                        {collectionNameByAddress(creator.creatorAddress) ??
+                          truncateAddress(creator.creatorAddress)}
                       </div>
-                      {collectionNameByAddress(creator.creatorAddress) ??
-                        truncateAddress(creator.creatorAddress)}
-                    </div>
+                    </a>
                   </Link>
                 )
               })
@@ -646,8 +676,8 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
                           <input
                             onChange={onChange}
                             className="mr-3 appearance-none rounded-full h-3 w-3 
-                              border border-gray-100 bg-gray-700 
-                              checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                border border-gray-100 bg-gray-700 
+                                checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                             type="radio"
                             name="preset"
                             disabled={loading}
@@ -688,8 +718,8 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
                           <input
                             onChange={onChange}
                             className="mr-3 appearance-none rounded-full h-3 w-3 
-                              border border-gray-100 bg-gray-700 
-                              checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                border border-gray-100 bg-gray-700 
+                                checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                             disabled={loading}
                             hidden={loading}
                             type="radio"
@@ -730,8 +760,8 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
                               <input
                                 onChange={onChange}
                                 className="mr-3 appearance-none rounded-full h-3 w-3 
-                                  border border-gray-100 bg-gray-700 
-                                  checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                    border border-gray-100 bg-gray-700 
+                                    checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                                 type="radio"
                                 name="preset"
                                 disabled={loading}
@@ -773,8 +803,8 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
                               <input
                                 onChange={onChange}
                                 className="mr-3 appearance-none rounded-full h-3 w-3 
-                                  border border-gray-100 bg-gray-700 
-                                  checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
+                                    border border-gray-100 bg-gray-700 
+                                    checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
                                 disabled={loading}
                                 hidden={loading}
                                 type="radio"
@@ -839,30 +869,48 @@ const Home: NextPage<HomePageProps> = ({ marketplace }) => {
               }
               itemRender={(nft) => {
                 return (
-                  <Link to={`/nfts/${nft.address}`} key={nft.address}>
-                    <NftCard
-                      nft={nft}
-                      marketplace={marketplace}
-                      moonrank={undefined}
-                      howrareis={undefined}
-                    />
+                  <Link
+                    href={`/nfts/${nft.address}`}
+                    key={nft.address}
+                    passHref
+                  >
+                    <a>
+                      <NftCard
+                        nft={nft}
+                        marketplace={marketplace}
+                        moonrank={undefined}
+                        howrareis={undefined}
+                      />
+                    </a>
                   </Link>
                 )
               }}
             />
           </div>
         </div>
+        <Button
+          size={ButtonSize.Small}
+          icon={<Filter size={16} className="mr-2" />}
+          className="fixed bottom-4 z-10 sm:hidden"
+          onClick={toggleSidebar}
+        >
+          Filter
+        </Button>
       </div>
-      <Button
-        size={ButtonSize.Small}
-        icon={<Filter size={16} className="mr-2" />}
-        className="fixed bottom-4 z-10 sm:hidden"
-        onClick={toggleSidebar}
-      >
-        Filter
-      </Button>
-    </div>
+    </>
   )
+}
+
+interface HomeLayoutProps {
+  marketplace: Marketplace
+  children: ReactElement
+}
+
+Home.getLayout = function GetHomeLayout({
+  marketplace,
+  children,
+}: HomeLayoutProps) {
+  return <BannerLayout marketplace={marketplace}>{children}</BannerLayout>
 }
 
 export default Home

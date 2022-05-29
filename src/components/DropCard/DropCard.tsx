@@ -1,5 +1,5 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import Link from 'next/link'
 import { Drop, DropToken, DropType } from '../../utils/drops'
 import { DropCountdown } from './DropCountdown'
 import cx from 'classnames'
