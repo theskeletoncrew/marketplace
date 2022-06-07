@@ -24,6 +24,28 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
+    url: 'https://drops.skeletoncrew.rip/#/auction/CKKBGkhKcXQsds1axT7vn7SkgVbo75nDJWFs7tW9Z94Z',
+    title: 'Lost Soul',
+    artist: 'J. R. Coffron',
+    image:
+      'https://assets2.holaplex.tools/arweave/a5nvA9Mvtjkpu9B-OIDY-41pdpIx-lmdSoY_SOTzZ8M?width=400',
+    startDate: new Date('2022-06-07T12:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 33,
+    dropType: DropType.FIXED_PRICE,
+  },
+  {
+    url: 'https://drops.skeletoncrew.rip/#/auction/GihTUpoe1GB8rCj6odBaJ4oeuPmuP9KPVsy9BBHYkHdt',
+    title: 'one byte',
+    artist: 'Walmeer',
+    image:
+      'https://assets2.holaplex.tools/arweave/SWEGcHq-SWpViQgmFmHt-IzvkeNXg-y78NTePpysdZQ?width=400',
+    startDate: new Date('2022-06-07T12:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 33,
+    dropType: DropType.FIXED_PRICE,
+  },
+  {
     // url: 'https://drops.skeletoncrew.rip/#/auction/7HrbMuUg1J1afD5XVzXtnFjrWDo4RqvXipWrqs5TFgDM',
     url: 'https://drops.skeletoncrew.rip/#/auction/7PhpJXk4HTiVGJnVo8vxAz2cdichR1bCz12JEkp1WL45',
     title: 'Tiger of Eden',
