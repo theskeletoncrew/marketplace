@@ -45,7 +45,6 @@ import Chart from './../components/Chart'
 
 import { ADDRESSES } from '../utils/utilities'
 import { drops } from '../utils/drops'
-import WalletPortal from 'src/components/WalletPortal'
 
 const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
 
@@ -444,28 +443,6 @@ function Home({ marketplace }: HomePageProps) {
         <meta property="og:image" content={marketplace.bannerUrl} />
         <meta property="og:description" content={marketplace.description} />
       </Head>
-      {/* <div className="relative w-full">
-        <div className="absolute flex justify-end right-6 top-[28px]">
-          <div className="flex items-center justify-end">
-            {equals(
-              publicKey?.toBase58(),
-              marketplace.auctionHouse.authority
-            ) && (
-              <Link href="/admin/marketplace/edit" passHref>
-                <a className="text-sm cursor-pointer mr-6 hover:underline ">
-                  Admin Dashboard
-                </a>
-              </Link>
-            )}
-            <WalletPortal />
-          </div>
-        </div>
-        <img
-          src={marketplace.bannerUrl}
-          alt={marketplace.name}
-          className="object-cover w-full h-30 md:h-44 lg:h-60"
-        />
-      </div> */}
       <div className="w-full max-w-[1800px] px-4 sm:px-8">
         <div className="relative grid grid-cols-12 gap-4 justify-between w-full mt-20 mb-10">
           <div className="col-span-12 md:col-span-8 mb-6">
