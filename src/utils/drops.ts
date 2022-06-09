@@ -24,6 +24,17 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
+    url: 'https://drops.skeletoncrew.rip/#/auction/VbxFyg1vfuyEDzTTST3qMjwYMYootbkdcfe1b9iCLy5',
+    title: 'Ush Sipa the Wanderer',
+    artist: 'J. R. Coffron',
+    image:
+      'https://assets2.holaplex.tools/arweave/rGWy37arOdkeaWyfXwzwzQsogNHr85yRM9f5eajygS0?width=400',
+    startDate: new Date('2022-06-09T12:00:00-04:00'),
+    tokenType: DropToken.SOL,
+    quantity: 1,
+    dropType: DropType.AUCTION,
+  },
+  {
     url: 'https://drops.skeletoncrew.rip/#/auction/6E7vyo4gpdcMFjhcPzL3qbhEMy99E7QGKsp2z5fVqaa5',
     title: 'the seeker',
     artist: 'mint rain',
