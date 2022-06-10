@@ -46,17 +46,6 @@ export const drops: Drop[] = [
     dropType: DropType.AUCTION,
   },
   {
-    url: 'https://drops.skeletoncrew.rip/#/auction/6E7vyo4gpdcMFjhcPzL3qbhEMy99E7QGKsp2z5fVqaa5',
-    title: 'the seeker',
-    artist: 'mint rain',
-    image:
-      'https://assets2.holaplex.tools/arweave/ccTjwW9hdKmRJF-FBIuJp8W2xfzZHUlXPe1D57z6mb8?width=400',
-    startDate: new Date('2022-06-08T12:00:00-04:00'),
-    tokenType: DropToken.SKULL,
-    quantity: 33,
-    dropType: DropType.FIXED_PRICE,
-  },
-  {
     url: 'https://drops.skeletoncrew.rip/#/auction/CKKBGkhKcXQsds1axT7vn7SkgVbo75nDJWFs7tW9Z94Z',
     title: 'Lost Soul',
     artist: 'J. R. Coffron',
@@ -111,6 +100,18 @@ export const drops: Drop[] = [
     tokenType: DropToken.SOL,
     quantity: 1,
     dropType: DropType.AUCTION,
+    isSoldOut: true,
+  },
+  {
+    url: 'https://drops.skeletoncrew.rip/#/auction/6E7vyo4gpdcMFjhcPzL3qbhEMy99E7QGKsp2z5fVqaa5',
+    title: 'the seeker',
+    artist: 'mint rain',
+    image:
+      'https://assets2.holaplex.tools/arweave/ccTjwW9hdKmRJF-FBIuJp8W2xfzZHUlXPe1D57z6mb8?width=400',
+    startDate: new Date('2022-06-08T12:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 33,
+    dropType: DropType.FIXED_PRICE,
     isSoldOut: true,
   },
   {
