@@ -57,17 +57,6 @@ export const drops: Drop[] = [
     dropType: DropType.FIXED_PRICE,
   },
   {
-    url: 'https://drops.skeletoncrew.rip/#/auction/3GQFJDiah6pzgpjm3XCtr4hmVs4XWq6gGANa8Vot7PP3',
-    title: 'beyond the alley',
-    artist: 'walmeer',
-    image:
-      'https://assets2.holaplex.tools/arweave/UfXZAOAN7lOp-jDzeNn0HOhr9PzyYvi05tdYChkSzL4?width=400',
-    startDate: new Date('2022-06-08T12:00:00-04:00'),
-    tokenType: DropToken.SOL,
-    quantity: 1,
-    dropType: DropType.AUCTION,
-  },
-  {
     url: 'https://drops.skeletoncrew.rip/#/auction/CKKBGkhKcXQsds1axT7vn7SkgVbo75nDJWFs7tW9Z94Z',
     title: 'Lost Soul',
     artist: 'J. R. Coffron',
@@ -111,6 +100,18 @@ export const drops: Drop[] = [
     tokenType: DropToken.SKULL,
     quantity: 33,
     dropType: DropType.FIXED_PRICE,
+  },
+  {
+    url: 'https://drops.skeletoncrew.rip/#/auction/3GQFJDiah6pzgpjm3XCtr4hmVs4XWq6gGANa8Vot7PP3',
+    title: 'beyond the alley',
+    artist: 'walmeer',
+    image:
+      'https://assets2.holaplex.tools/arweave/UfXZAOAN7lOp-jDzeNn0HOhr9PzyYvi05tdYChkSzL4?width=400',
+    startDate: new Date('2022-06-08T12:00:00-04:00'),
+    tokenType: DropToken.SOL,
+    quantity: 1,
+    dropType: DropType.AUCTION,
+    isSoldOut: true,
   },
   {
     url: 'https://raffles.skeletoncrew.rip/raffles/7xDXyg3sifaCqXbFBepJ53nDMbpHMAPA85brFhCawqWq',
