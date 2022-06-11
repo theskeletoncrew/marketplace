@@ -24,28 +24,6 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
-    url: 'https://drops.skeletoncrew.rip/#/auction/7PYFDF5KRibgVaRp9y2QocKoBKVYqXpjmPxFRUALwRh7',
-    title: 'the sky realm',
-    artist: 'mint rain',
-    image:
-      'https://assets2.holaplex.tools/arweave/ONyetPZKXBaqzGOPpf-3KMzavhhce6t3Mgb26orAJ9o?width=400',
-    startDate: new Date('2022-06-10T12:00:00-04:00'),
-    tokenType: DropToken.SOL,
-    quantity: 1,
-    dropType: DropType.AUCTION,
-  },
-  {
-    url: 'https://drops.skeletoncrew.rip/#/auction/VbxFyg1vfuyEDzTTST3qMjwYMYootbkdcfe1b9iCLy5',
-    title: 'Ush Sipa the Wanderer',
-    artist: 'J. R. Coffron',
-    image:
-      'https://assets2.holaplex.tools/arweave/rGWy37arOdkeaWyfXwzwzQsogNHr85yRM9f5eajygS0?width=400',
-    startDate: new Date('2022-06-09T12:00:00-04:00'),
-    tokenType: DropToken.SOL,
-    quantity: 1,
-    dropType: DropType.AUCTION,
-  },
-  {
     url: 'https://drops.skeletoncrew.rip/#/auction/CKKBGkhKcXQsds1axT7vn7SkgVbo75nDJWFs7tW9Z94Z',
     title: 'Lost Soul',
     artist: 'J. R. Coffron',
@@ -77,6 +55,30 @@ export const drops: Drop[] = [
     tokenType: DropToken.SKULL,
     quantity: 33,
     dropType: DropType.FIXED_PRICE,
+  },
+  {
+    url: 'https://drops.skeletoncrew.rip/#/auction/7PYFDF5KRibgVaRp9y2QocKoBKVYqXpjmPxFRUALwRh7',
+    title: 'the sky realm',
+    artist: 'mint rain',
+    image:
+      'https://assets2.holaplex.tools/arweave/ONyetPZKXBaqzGOPpf-3KMzavhhce6t3Mgb26orAJ9o?width=400',
+    startDate: new Date('2022-06-10T12:00:00-04:00'),
+    tokenType: DropToken.SOL,
+    quantity: 1,
+    dropType: DropType.AUCTION,
+    isSoldOut: true
+  },
+  {
+    url: 'https://drops.skeletoncrew.rip/#/auction/VbxFyg1vfuyEDzTTST3qMjwYMYootbkdcfe1b9iCLy5',
+    title: 'Ush Sipa the Wanderer',
+    artist: 'J. R. Coffron',
+    image:
+      'https://assets2.holaplex.tools/arweave/rGWy37arOdkeaWyfXwzwzQsogNHr85yRM9f5eajygS0?width=400',
+    startDate: new Date('2022-06-09T12:00:00-04:00'),
+    tokenType: DropToken.SOL,
+    quantity: 1,
+    dropType: DropType.AUCTION,
+    isSoldOut: true
   },
   {
     url: 'https://drops.skeletoncrew.rip/#/auction/3GQFJDiah6pzgpjm3XCtr4hmVs4XWq6gGANa8Vot7PP3',
