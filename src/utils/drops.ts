@@ -24,6 +24,17 @@ export enum DropToken {
 
 export const drops: Drop[] = [
   {
+    url: 'https://raffles.skeletoncrew.rip/raffles/HyHMTMqHEunBmrzUgBVryL1qgp57yyGCmKZyUY1aB3si',
+    title: 'What was that?',
+    artist: 'Zen0',
+    image:
+      'https://assets2.holaplex.tools/arweave/W3GVmm7BJkztUpOjZ7tLVj8RNiHpX89eLEqq7FBJpfo?width=400',
+    startDate: new Date('2022-06-16T10:00:00-04:00'),
+    tokenType: DropToken.SKULL,
+    quantity: 1,
+    dropType: DropType.RAFFLE,
+  },
+  {
     url: 'https://drops.skeletoncrew.rip/#/auction/CKKBGkhKcXQsds1axT7vn7SkgVbo75nDJWFs7tW9Z94Z',
     title: 'Lost Soul',
     artist: 'J. R. Coffron',
