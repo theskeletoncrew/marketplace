@@ -274,7 +274,7 @@ export const NftLayout = ({
                 controlsList="nodownload"
                 loop={true}
                 poster={data?.nft.image}
-                src={data?.nft.files.at(-1)?.uri as string}
+                src={data?.nft.files?.at(-1)?.uri as string}
               ></video>
             ) : data?.nft.category === 'image' ? (
               <img
@@ -287,7 +287,7 @@ export const NftLayout = ({
                 sandbox=""
                 referrerPolicy="no-referrer"
                 frameBorder="0"
-                src={data?.nft.files.at(-1)?.uri as string}
+                src={data?.nft.files?.at(-1)?.uri as string}
               ></iframe>
             ) : (
               <></>
@@ -397,7 +397,7 @@ export const NftLayout = ({
                     hidden: loading,
                   })}
                 >
-                  {listing && (
+                  {listing && listing.auctionHouse && (
                     <div className="flex-1 mb-6">
                       <div className="label">PRICE</div>
                       <Price
@@ -485,7 +485,7 @@ export const NftLayout = ({
                   ) : (
                     offers.map((o: Offer) => (
                       <article
-                        key={o.address}
+                        key={o.id}
                         className={cx(
                           'grid p-4 mb-4 border border-gray-700 rounded',
                           ifElse(
@@ -504,10 +504,12 @@ export const NftLayout = ({
                           </a>
                         </div>
                         <div>
-                          <Price
-                            price={o.price.toNumber()}
-                            token={tokenMap.get(o.auctionHouse.treasuryMint)}
-                          />
+                          {o.auctionHouse && (
+                            <Price
+                              price={o.price.toNumber()}
+                              token={tokenMap.get(o.auctionHouse.treasuryMint)}
+                            />
+                          )}
                         </div>
                         <div>{format(o.createdAt, 'en_US')}</div>
                         {(offer || isOwner) && (
@@ -574,7 +576,7 @@ export const NftLayout = ({
                       const hasWallets = moreThanOne(a.wallets)
                       return (
                         <article
-                          key={a.address}
+                          key={a.id}
                           className="grid grid-cols-4 p-4 mb-4 border border-gray-700 rounded"
                         >
                           <div className="flex flex-col justify-center flex-start gap-1">
@@ -665,10 +667,14 @@ export const NftLayout = ({
                             </div>
                           </div>
                           <div className="self-center">
-                            <Price
-                              price={a.price.toNumber()}
-                              token={tokenMap.get(a.auctionHouse.treasuryMint)}
-                            />
+                            {a.auctionHouse && (
+                              <Price
+                                price={a.price.toNumber()}
+                                token={tokenMap.get(
+                                  a.auctionHouse.treasuryMint
+                                )}
+                              />
+                            )}
                           </div>
                           <div className="self-center text-sm">
                             {format(a.createdAt, 'en_US')}
