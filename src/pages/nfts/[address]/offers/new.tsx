@@ -382,10 +382,12 @@ const OfferNew = ({ nft, marketplace, nftQuery }: OfferProps) => {
                       classNamePrefix="base"
                       value={field.value}
                       options={
-                        tokens.map((token) => ({
-                          value: token?.address,
-                          label: token?.symbol,
-                        })) as OptionsType<OptionType>
+                        tokens
+                          .filter((token) => token?.symbol != 'SKULL')
+                          .map((token) => ({
+                            value: token?.address,
+                            label: token?.symbol,
+                          })) as OptionsType<OptionType>
                       }
                       onChange={(next: ValueType<OptionType>) => {
                         field.onChange(next)
