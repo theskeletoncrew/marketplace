@@ -1,4 +1,10 @@
-import { gql, useQuery, useLazyQuery } from '@apollo/client'
+import {
+  gql,
+  useQuery,
+  useLazyQuery,
+  QueryResult,
+  OperationVariables,
+} from '@apollo/client'
 import { useWallet } from '@solana/wallet-adapter-react'
 import cx from 'classnames'
 import { subDays } from 'date-fns'
@@ -18,6 +24,8 @@ import {
   length,
   map,
   modify,
+  zip,
+  forEach,
   not,
   or,
   partial,
@@ -30,18 +38,12 @@ import { Filter } from 'react-feather'
 import { Controller, useForm } from 'react-hook-form'
 import Link from 'next/link'
 import Select from 'react-select'
-import { toSOL } from './../../modules/lamports'
+import { toSOL } from '../../modules/sol'
 import { BannerLayout } from './../../layouts/Banner'
-import {
-  truncateAddress,
-  collectionNameByAddress,
-  collectionDescriptionByAddress,
-  howrareisJSONByAddress,
-  moonrankJSONByAddress,
-} from '../../modules/address'
 import {
   GetNftCounts,
   GetWalletCounts,
+  GET_LISTED_TOKEN_NFT_COUNT,
   GET_NFT_COUNTS,
   GET_WALLET_COUNTS,
 } from '..'
@@ -50,15 +52,23 @@ import Button, { ButtonSize, ButtonType } from '../../components/Button'
 import { List } from '../../components/List'
 import { NftCard } from '../../components/NftCard'
 import { useSidebar } from '../../hooks/sidebar'
-import Chart from './../../components/Chart'
+import {
+  truncateAddress,
+  collectionNameByAddress,
+  collectionDescriptionByAddress,
+  howrareisJSONByAddress,
+  moonrankJSONByAddress,
+} from '../../modules/address'
 import {
   AttributeFilter,
   Creator,
   Marketplace,
   Nft,
   PresetNftFilter,
-  PriceChart,
-} from '../../types.d'
+  GetPriceChartData,
+} from '@holaplex/marketplace-js-sdk'
+import { useTokenList } from 'src/hooks/tokenList'
+
 import { ADDRESSES } from '../../utils/utilities'
 
 const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
@@ -94,7 +104,6 @@ const GET_NFTS = gql`
       attributes: $attributes
     ) {
       address
-      mintAddress
       name
       description
       image
@@ -108,16 +117,19 @@ const GET_NFTS = gql`
         twitterHandle
         profile {
           handle
-          profileImageUrl
+          profileImageUrlLowres
           bannerImageUrl
         }
       }
       offers {
-        address
+        id
       }
       listings {
-        address
-        auctionHouse
+        id
+        auctionHouse {
+          address
+          treasuryMint
+        }
         price
       }
     }
@@ -129,7 +141,10 @@ const GET_COLLECTION_INFO = gql`
     creator(address: $creator) {
       address
       stats(auctionHouses: $auctionHouses) {
-        auctionHouse
+        auctionHouse {
+          address
+          treasuryMint
+        }
         volume24hr
         average
         floor
@@ -189,21 +204,10 @@ export async function getServerSideProps({ req, query }: NextPageContext) {
             creatorAddress
             storeConfigAddress
           }
-          auctionHouse {
+          auctionHouses {
             address
             treasuryMint
-            auctionHouseTreasury
-            treasuryWithdrawalDestination
-            feeWithdrawalDestination
             authority
-            creator
-            auctionHouseFeeAccount
-            bump
-            treasuryBump
-            feePayerBump
-            sellerFeeBasisPoints
-            requiresSignOff
-            canChangeSalePrice
           }
         }
         creator(address: $creator) {
@@ -260,10 +264,7 @@ interface CreatorPageProps extends AppProps {
 interface NftFilterForm {
   attributes: AttributeFilter[]
   preset: PresetNftFilter
-}
-
-export interface GetPriceChartData {
-  charts: PriceChart
+  tokens: string[]
 }
 
 const startDate = subDays(new Date(), 6).toISOString()
@@ -275,6 +276,11 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
   const [hasMore, setHasMore] = useState(true)
   const { sidebarOpen, toggleSidebar } = useSidebar()
   const router = useRouter()
+  const [listedCountQueryMap, setListedCountQueryMap] = useState<
+    Map<String, QueryResult<GetNftCounts, OperationVariables>>
+  >(new Map())
+  const auctionHouses = map(prop('address'))(marketplace.auctionHouses || [])
+
   const {
     data,
     loading: loadingNfts,
@@ -282,10 +288,9 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
     fetchMore,
     variables,
   } = useQuery<GetNftsData>(GET_NFTS, {
-    fetchPolicy: 'network-only',
     variables: {
       creators: [router.query.creator],
-      auctionHouses: [marketplace.auctionHouse.address],
+      auctionHouses: auctionHouses,
       offset: 0,
       limit: 24,
     },
@@ -294,17 +299,47 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
   const collectionQuery = useQuery<GetCollectionInfo>(GET_COLLECTION_INFO, {
     variables: {
       creator: router.query.creator,
-      auctionHouses: [marketplace.auctionHouse.address],
+      auctionHouses: auctionHouses,
     },
   })
 
   const nftCountsQuery = useQuery<GetNftCounts>(GET_NFT_COUNTS, {
-    fetchPolicy: 'network-only',
     variables: {
       creators: [router.query.creator],
-      auctionHouses: [marketplace.auctionHouse.address],
+      auctionHouses: auctionHouses,
     },
   })
+
+  useEffect(() => {
+    if (!marketplace.auctionHouses) {
+      return
+    }
+
+    ;(async () => {
+      const nextListedCountQueryMap = new Map()
+
+      const tokenCounts = await Promise.all(
+        marketplace.auctionHouses.map(({ address }) =>
+          client.query<GetNftCounts>({
+            query: GET_LISTED_TOKEN_NFT_COUNT,
+            variables: {
+              creators: [router.query.creator],
+              auctionHouse: address,
+            },
+          })
+        )
+      )
+
+      pipe(
+        zip(marketplace.auctionHouses),
+        forEach(([auctionHouse, queryResult]) => {
+          nextListedCountQueryMap.set(auctionHouse.treasuryMint, queryResult)
+        })
+      )(tokenCounts)
+
+      setListedCountQueryMap(nextListedCountQueryMap)
+    })()
+  }, [marketplace.auctionHouses])
 
   const [getWalletCounts, walletCountsQuery] = useLazyQuery<GetWalletCounts>(
     GET_WALLET_COUNTS,
@@ -312,7 +347,7 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
       variables: {
         address: publicKey?.toBase58(),
         creators: [router.query.creator],
-        auctionHouses: [marketplace.auctionHouse.address],
+        auctionHouses: auctionHouses,
       },
     }
   )
@@ -320,9 +355,8 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
   const priceChartDataQuery = useQuery<GetPriceChartData>(
     GET_PRICE_CHART_DATA,
     {
-      fetchPolicy: 'network-only',
       variables: {
-        auctionHouses: [marketplace.auctionHouse.address],
+        auctionHouses: auctionHouses,
         creators: [router.query.creator],
         startDate: startDate,
         endDate: endDate,
@@ -330,9 +364,14 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
     }
   )
 
-  const { control, watch } = useForm<NftFilterForm>({
-    defaultValues: { preset: PresetNftFilter.All },
+  const { watch, control, getValues } = useForm<NftFilterForm>({
+    defaultValues: { preset: PresetNftFilter.All, tokens: [] },
   })
+  const [tokenMap, loadingTokens] = useTokenList()
+
+  const tokens = marketplace?.auctionHouses?.map(({ treasuryMint }) =>
+    tokenMap.get(treasuryMint)
+  )
 
   const loading =
     loadingNfts ||
@@ -348,11 +387,23 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
 
   useEffect(() => {
     const subscription = watch(({ attributes, preset }) => {
+      let selectedAuctionHouses = auctionHouses
+      if (
+        preset === PresetNftFilter.Listed &&
+        tokens?.some((t) => t !== undefined)
+      ) {
+        selectedAuctionHouses = marketplace.auctionHouses
+          ?.filter(({ treasuryMint }) => tokens?.includes(treasuryMint))
+          .map(({ address }) => address) as string[]
+      }
+
       const pubkey = publicKey?.toBase58()
-      const nextAttributes = pipe(
-        filter(pipe(prop('values'), isEmpty, not)),
-        map(modify('values', map(prop('value'))))
-      )(attributes)
+      const nextAttributes = attributes
+        ? pipe(
+            filter(pipe(prop('values'), isEmpty, not)),
+            map(modify('values', map(prop('value'))))
+          )(attributes)
+        : undefined
 
       const owners = ifElse(
         equals(PresetNftFilter.Owned),
@@ -374,7 +425,7 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
 
       refetch({
         creators: [router.query.creator],
-        auctionHouses: [marketplace.auctionHouse.address],
+        auctionHouses: selectedAuctionHouses,
         attributes: nextAttributes,
         owners,
         offerers,
@@ -786,6 +837,7 @@ function CreatorShow({ marketplace, creator }: CreatorPageProps) {
                       <NftCard
                         nft={nft}
                         marketplace={marketplace}
+                        tokenMap={tokenMap}
                         moonrank={
                           (moonrank && moonrank[nft.mintAddress]) || undefined
                         }

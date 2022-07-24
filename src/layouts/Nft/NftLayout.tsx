@@ -8,7 +8,6 @@ import {
   all,
   always,
   and,
-  or,
   when,
   any,
   equals,
@@ -17,10 +16,15 @@ import {
   ifElse,
   isNil,
   length,
+  map,
   gt,
   not,
   pipe,
   prop,
+  view,
+  lensPath,
+  includes,
+  flip,
 } from 'ramda'
 import { PublicKey } from '@solana/web3.js'
 import { DollarSign, Tag } from 'react-feather'
@@ -29,25 +33,26 @@ import AcceptOfferForm from '../../components/AcceptOfferForm'
 import CancelOfferForm from '../../components/CancelOfferForm'
 import { BasicLayout } from '../Basic'
 import { truncateAddress, addressAvatar } from '../../modules/address'
-import { toSOL } from '../../modules/lamports'
 import {
   Activity,
-  GetNftData,
-  Listing,
+  AhListing,
   Marketplace,
   Nft,
   Offer,
-} from '../../types'
+  GetNftData,
+} from '@holaplex/marketplace-js-sdk'
 import { identity } from 'lodash'
 import {
   collectionNameByAddress,
   howrareisJSONByAddress,
   moonrankJSONByAddress,
 } from '../../modules/address'
+import Price from '../../components/Price'
+import { useTokenList } from '../../hooks/tokenList'
 import Avatar from '../../components/Avatar'
 
 const moreThanOne = pipe(length, (len) => gt(len, 1))
-const pickAuctionHouse = prop('auctionHouse')
+const pickAuctionHouseAddress = view(lensPath(['auctionHouse', 'address']))
 
 interface NftLayoutProps {
   marketplace: Marketplace
@@ -64,22 +69,28 @@ export const NftLayout = ({
 }: NftLayoutProps) => {
   const { publicKey } = useWallet()
   const router = useRouter()
+  const [tokenMap, loadingTokens] = useTokenList()
 
   const { data, loading, refetch } = nftQuery
 
-  const isMarketplaceAuctionHouse = equals(marketplace.auctionHouse.address)
+  const marketplaceAuctionHouseAddresses = map(prop('address'))(
+    marketplace.auctionHouses
+  )
+  const isMarketplaceAuctionHouse = flip(includes)(
+    marketplaceAuctionHouseAddresses
+  )
   const isOwner = equals(data?.nft.owner.address, publicKey?.toBase58()) || null
-  const listing = find<Listing>(
-    pipe(pickAuctionHouse, isMarketplaceAuctionHouse)
+  const listing = find<AhListing>(
+    pipe(pickAuctionHouseAddress, isMarketplaceAuctionHouse)
   )(data?.nft.listings || [])
   const offers = filter<Offer>(
-    pipe(pickAuctionHouse, isMarketplaceAuctionHouse)
+    pipe(pickAuctionHouseAddress, isMarketplaceAuctionHouse)
   )(data?.nft.offers || [])
   const offer = find<Offer>(pipe(prop('buyer'), equals(publicKey?.toBase58())))(
     data?.nft.offers || []
   )
   let activities = filter<Activity>(
-    pipe(pickAuctionHouse, isMarketplaceAuctionHouse)
+    pipe(pickAuctionHouseAddress, isMarketplaceAuctionHouse)
   )(data?.nft.activities || [])
 
   const moonrank = moonrankJSONByAddress(
@@ -323,7 +334,9 @@ export const NftLayout = ({
                                 always(
                                   addressAvatar(new PublicKey(creator.address))
                                 )
-                              )(creator.profile?.profileImageUrl) as string
+                              )(
+                                creator.profile?.profileImageUrlLowres
+                              ) as string
                             }
                           />
                         </a>
@@ -333,51 +346,44 @@ export const NftLayout = ({
                 </div>
               </div>
               <div>
-                {data?.nft.primarySaleHappened && (
-                  <>
-                    <div className="flex justify-end mb-1 label">
-                      {loading ? (
-                        <div className="h-4 bg-gray-800 rounded w-14" />
-                      ) : (
-                        <span className="text-sm text-gray-300">
-                          Collected by
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex justify-end">
-                      {loading ? (
-                        <div className="w-20 h-6 bg-gray-800 rounded" />
-                      ) : (
-                        <a
-                          href={`https://holaplex.com/profiles/${data?.nft.owner.address}`}
-                          rel="noreferrer"
-                          target="_blank"
-                          className="flex gap-1 items-center transition-transform hover:scale-[1.2]"
-                        >
-                          <img
-                            className="object-cover w-6 h-6 border-2 border-gray-900 rounded-full user-avatar"
-                            src={
-                              when(
-                                isNil,
-                                always(
-                                  addressAvatar(
-                                    new PublicKey(data?.nft.owner.address)
-                                  )
-                                )
-                              )(
-                                data?.nft.owner.profile?.profileImageUrl
-                              ) as string
-                            }
-                          />
-
-                          {data.nft.owner?.twitterHandle
-                            ? `@${data.nft.owner.twitterHandle}`
-                            : truncateAddress(data?.nft.owner.address)}
-                        </a>
-                      )}
-                    </div>
-                  </>
-                )}
+                <div className="flex justify-end mb-1 label">
+                  {loading ? (
+                    <div className="h-4 bg-gray-800 rounded w-14" />
+                  ) : (
+                    <span className="text-sm text-gray-300">Collected by</span>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  {loading ? (
+                    <div className="w-20 h-6 bg-gray-800 rounded" />
+                  ) : (
+                    <a
+                      href={`https://holaplex.com/profiles/${data?.nft.owner.address}`}
+                      rel="noreferrer"
+                      target="_blank"
+                      className="flex gap-1 items-center transition-transform hover:scale-[1.2]"
+                    >
+                      <img
+                        className="object-cover w-6 h-6 border-2 border-gray-900 rounded-full user-avatar"
+                        src={
+                          when(
+                            isNil,
+                            always(
+                              addressAvatar(
+                                new PublicKey(data?.nft.owner.address)
+                              )
+                            )
+                          )(
+                            data?.nft.owner.profile?.profileImageUrlLowres
+                          ) as string
+                        }
+                      />
+                      {data.nft.owner?.twitterHandle
+                        ? `@${data.nft.owner.twitterHandle}`
+                        : truncateAddress(data?.nft.owner.address || '')}
+                    </a>
+                  )}
+                </div>
               </div>
             </div> */}
             {any(identity)([isOwner, listing, not(offer)]) && (
@@ -394,11 +400,11 @@ export const NftLayout = ({
                   {listing && (
                     <div className="flex-1 mb-6">
                       <div className="label">PRICE</div>
-                      <p className="text-base md:text-xl lg:text-3xl">
-                        <b className="sol-amount">
-                          {toSOL(listing.price.toNumber())}
-                        </b>
-                      </p>
+                      <Price
+                        price={listing.price.toNumber()}
+                        token={tokenMap.get(listing.auctionHouse.treasuryMint)}
+                        style={'text-base md:text-xl lg:text-3xl font-bold'}
+                      />
                     </div>
                   )}
                 </div>
@@ -408,6 +414,7 @@ export const NftLayout = ({
                     isOwner,
                     listing,
                     offer,
+                    nftQuery,
                   })}
                 </div>
               </div>
@@ -421,7 +428,7 @@ export const NftLayout = ({
                   <div className="h-16 bg-gray-800 rounded" />
                 </>
               ) : (
-                data?.nft.attributes.map((a) => (
+                data?.nft.attributes?.map((a) => (
                   <div
                     key={a.traitType}
                     className="p-3 border border-gray-700 rounded"
@@ -497,9 +504,10 @@ export const NftLayout = ({
                           </a>
                         </div>
                         <div>
-                          <span className="sol-amount">
-                            {toSOL(o.price.toNumber())}
-                          </span>
+                          <Price
+                            price={o.price.toNumber()}
+                            token={tokenMap.get(o.auctionHouse.treasuryMint)}
+                          />
                         </div>
                         <div>{format(o.createdAt, 'en_US')}</div>
                         {(offer || isOwner) && (
@@ -518,7 +526,6 @@ export const NftLayout = ({
                             {isOwner && (
                               <AcceptOfferForm
                                 nft={data?.nft}
-                                marketplace={marketplace}
                                 offer={o}
                                 listing={listing}
                                 refetch={refetch}
@@ -619,7 +626,8 @@ export const NftLayout = ({
                                         )
                                       )
                                     )(
-                                      a.wallets[0].profile?.profileImageUrl
+                                      a.wallets[0].profile
+                                        ?.profileImageUrlLowres
                                     ) as string
                                   }
                                 />
@@ -644,7 +652,8 @@ export const NftLayout = ({
                                           )
                                         )
                                       )(
-                                        a.wallets[1].profile?.profileImageUrl
+                                        a.wallets[1].profile
+                                          ?.profileImageUrlLowres
                                       ) as string
                                     }
                                   />
@@ -656,9 +665,10 @@ export const NftLayout = ({
                             </div>
                           </div>
                           <div className="self-center">
-                            <span className="sol-amount">
-                              {toSOL(a.price.toNumber())}
-                            </span>
+                            <Price
+                              price={a.price.toNumber()}
+                              token={tokenMap.get(a.auctionHouse.treasuryMint)}
+                            />
                           </div>
                           <div className="self-center text-sm">
                             {format(a.createdAt, 'en_US')}

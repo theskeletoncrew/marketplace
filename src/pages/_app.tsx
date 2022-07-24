@@ -13,6 +13,7 @@ import {
 } from '@solana/wallet-adapter-react'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
 import {
+  GlowWalletAdapter,
   LedgerWalletAdapter,
   PhantomWalletAdapter,
   SlopeWalletAdapter,
@@ -29,10 +30,11 @@ import client from '../client'
 import { ToastContainer } from 'react-toastify'
 import { ViewerProvider } from './../providers/Viewer'
 import 'react-toastify/dist/ReactToastify.css'
+import { MultiTransactionProvider } from '../modules/multi-transaction'
 
 const network = WalletAdapterNetwork.Mainnet
 
-const CLUSTER_API_URL = 'https://holaplex.rpcpool.com' //'http://api.devnet.solana.com'
+const CLUSTER_API_URL = process.env.NEXT_PUBLIC_SOLANA_ENDPOINT || ''
 
 const clusterApiUrl = (cluster: Cluster): string => CLUSTER_API_URL
 
@@ -46,13 +48,14 @@ type AppPropsWithLayout = AppProps & {
 
 function App({ Component, pageProps }: AppPropsWithLayout) {
   const endpoint = useMemo(() => clusterApiUrl(network), [])
+
   const wallets = useMemo(
     () => [
+      new GlowWalletAdapter(),
       new PhantomWalletAdapter(),
       new SlopeWalletAdapter(),
       new SolflareWalletAdapter(),
-      new TorusWalletAdapter(),
-      new LedgerWalletAdapter(),
+      new TorusWalletAdapter({ params: { network } }),
       new SolletWalletAdapter({ network }),
       new SolletExtensionWalletAdapter({ network }),
     ],
@@ -69,18 +72,20 @@ function App({ Component, pageProps }: AppPropsWithLayout) {
       >
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider className="wallet-modal-theme">
-            <ViewerProvider>
-              <ToastContainer
-                theme="dark"
-                hideProgressBar={true}
-                position="bottom-center"
-                className="w-full max-w-full font-sans text-sm text-white bottom-4 sm:right-4 sm:left-auto sm:w-96 sm:translate-x-0"
-                toastClassName="bg-gray-900 bg-opacity-80 rounded-lg items-center"
-              />
-              <Layout {...pageProps}>
-                <Component {...pageProps} />
-              </Layout>
-            </ViewerProvider>
+            <MultiTransactionProvider>
+              <ViewerProvider>
+                <ToastContainer
+                  theme="dark"
+                  hideProgressBar={true}
+                  position="bottom-center"
+                  className="w-full max-w-full font-sans text-sm text-white bottom-4 sm:right-4 sm:left-auto sm:w-96 sm:translate-x-0"
+                  toastClassName="bg-gray-900 bg-opacity-80 rounded-lg items-center"
+                />
+                <Layout {...pageProps}>
+                  <Component {...pageProps} />
+                </Layout>
+              </ViewerProvider>
+            </MultiTransactionProvider>
           </WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>

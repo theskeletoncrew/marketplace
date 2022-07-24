@@ -1,4 +1,11 @@
-import { gql, useQuery, useLazyQuery } from '@apollo/client'
+import {
+  gql,
+  useQuery,
+  useLazyQuery,
+  QueryResult,
+  OperationVariables,
+  useApolloClient,
+} from '@apollo/client'
 import { useWallet } from '@solana/wallet-adapter-react'
 import cx from 'classnames'
 import { NextPage, NextPageContext } from 'next'
@@ -15,11 +22,13 @@ import {
   not,
   partial,
   pipe,
+  zip,
   prop,
   when,
+  forEach,
 } from 'ramda'
 import React, { ReactElement, ReactNode, useEffect, useState } from 'react'
-import { toSOL } from './../modules/lamports'
+import { toSOL } from '../modules/sol'
 import { Filter } from 'react-feather'
 import { Controller, useForm } from 'react-hook-form'
 import Link from 'next/link'
@@ -33,15 +42,16 @@ import {
   Creator,
   Marketplace,
   Nft,
-  NftCount,
   PresetNftFilter,
-  PriceChart,
+  GetPriceChartData,
+  NftCount,
   Wallet,
-} from '../types.d'
+} from '@holaplex/marketplace-js-sdk'
 import { List } from './../components/List'
 import { NftCard } from './../components/NftCard'
 import { subDays } from 'date-fns'
 import Chart from './../components/Chart'
+import { useTokenList } from 'src/hooks/tokenList'
 
 import { ADDRESSES } from '../utils/utilities'
 import { drops } from '../utils/drops'
@@ -86,17 +96,19 @@ const GET_NFTS = gql`
         twitterHandle
         profile {
           handle
-          profileImageUrl
+          profileImageUrlLowres
           bannerImageUrl
         }
       }
       offers {
-        address
-        price
+        id
       }
       listings {
-        address
-        auctionHouse
+        id
+        auctionHouse {
+          address
+          treasuryMint
+        }
         price
       }
     }
@@ -116,6 +128,14 @@ export const GET_NFT_COUNTS = gql`
     nftCounts(creators: $creators) {
       total
       listed(auctionHouses: $auctionHouses)
+    }
+  }
+`
+
+export const GET_LISTED_TOKEN_NFT_COUNT = gql`
+  query GetNftCounts($creators: [PublicKey!]!, $auctionHouse: PublicKey!) {
+    nftCounts(creators: $creators) {
+      listed(auctionHouses: [$auctionHouse])
     }
   }
 `
@@ -153,7 +173,7 @@ const GET_CREATORS_PREVIEW = gql`
         }
         profile {
           handle
-          profileImageUrl
+          profileImageUrlLowres
         }
       }
     }
@@ -168,8 +188,9 @@ const GET_MARKETPLACE_INFO = gql`
       stats {
         nfts
       }
-      auctionHouse {
+      auctionHouses {
         address
+        treasuryMint
         stats {
           mint
           floor
@@ -220,21 +241,10 @@ export async function getServerSideProps({ req }: NextPageContext) {
             creatorAddress
             storeConfigAddress
           }
-          auctionHouse {
+          auctionHouses {
             address
             treasuryMint
-            auctionHouseTreasury
-            treasuryWithdrawalDestination
-            feeWithdrawalDestination
             authority
-            creator
-            auctionHouseFeeAccount
-            bump
-            treasuryBump
-            feePayerBump
-            sellerFeeBasisPoints
-            requiresSignOff
-            canChangeSalePrice
           }
         }
       }
@@ -254,7 +264,7 @@ export async function getServerSideProps({ req }: NextPageContext) {
     }
   }
 
-  if (pipe(length, equals(1))(marketplace.creators)) {
+  if (marketplace.creators && pipe(length, equals(1))(marketplace.creators)) {
     return {
       redirect: {
         permanent: false,
@@ -297,10 +307,7 @@ interface HomePageProps extends AppPropsWithLayout {
 interface NftFilterForm {
   attributes: AttributeFilter[]
   preset: PresetNftFilter
-}
-
-export interface GetPriceChartData {
-  charts: PriceChart
+  tokens: string[]
 }
 
 const startDate = subDays(new Date(), 6).toISOString()
@@ -308,7 +315,15 @@ const endDate = new Date().toISOString()
 
 function Home({ marketplace }: HomePageProps) {
   const { publicKey, connected } = useWallet()
-  const creators = map(prop('creatorAddress'))(marketplace.creators)
+  const creators = map(prop('creatorAddress'))(marketplace.creators || [])
+  const auctionHouses = map(prop('address'))(marketplace.auctionHouses || [])
+  const client = useApolloClient()
+
+  const [listedCountQueryMap, setListedCountQueryMap] = useState<
+    Map<String, QueryResult<GetNftCounts, OperationVariables>>
+  >(new Map())
+  const [tokenMap, loadingTokens] = useTokenList()
+
   const marketplaceQuery = useQuery<GetMarketplaceInfo>(GET_MARKETPLACE_INFO, {
     variables: {
       subdomain: marketplace.subdomain,
@@ -318,9 +333,40 @@ function Home({ marketplace }: HomePageProps) {
   const nftCountsQuery = useQuery<GetNftCounts>(GET_NFT_COUNTS, {
     variables: {
       creators,
-      auctionHouses: [marketplace.auctionHouse.address],
+      auctionHouses: auctionHouses,
     },
   })
+
+  useEffect(() => {
+    if (!marketplace.auctionHouses) {
+      return
+    }
+
+    ;(async () => {
+      const nextListedCountQueryMap = new Map()
+
+      const tokenCounts = await Promise.all(
+        marketplace.auctionHouses.map(({ address }) =>
+          client.query<GetNftCounts>({
+            query: GET_LISTED_TOKEN_NFT_COUNT,
+            variables: {
+              creators,
+              auctionHouse: address,
+            },
+          })
+        )
+      )
+
+      pipe(
+        zip(marketplace.auctionHouses),
+        forEach(([auctionHouse, queryResult]) => {
+          nextListedCountQueryMap.set(auctionHouse.treasuryMint, queryResult)
+        })
+      )(tokenCounts)
+
+      setListedCountQueryMap(nextListedCountQueryMap)
+    })()
+  }, [marketplace.auctionHouses])
 
   const [getWalletCounts, walletCountsQuery] = useLazyQuery<GetWalletCounts>(
     GET_WALLET_COUNTS,
@@ -328,16 +374,16 @@ function Home({ marketplace }: HomePageProps) {
       variables: {
         address: publicKey?.toBase58(),
         creators,
-        auctionHouses: [marketplace.auctionHouse.address],
+        auctionHouses: auctionHouses,
       },
     }
   )
 
   const nftsQuery = useQuery<GetNftsData>(GET_NFTS, {
-    fetchPolicy: 'network-only',
+    fetchPolicy: 'cache-first',
     variables: {
       creators,
-      auctionHouses: [marketplace.auctionHouse.address],
+      auctionHouses: auctionHouses,
       offset: 0,
       limit: 24,
     },
@@ -352,9 +398,8 @@ function Home({ marketplace }: HomePageProps) {
   const priceChartDataQuery = useQuery<GetPriceChartData>(
     GET_PRICE_CHART_DATA,
     {
-      fetchPolicy: 'network-only',
       variables: {
-        auctionHouses: [marketplace.auctionHouse.address],
+        auctionHouses: auctionHouses,
         creators: creators,
         startDate: startDate,
         endDate: endDate,
@@ -366,9 +411,18 @@ function Home({ marketplace }: HomePageProps) {
 
   const [hasMore, setHasMore] = useState(true)
 
-  const { watch, control } = useForm<NftFilterForm>({
-    defaultValues: { preset: PresetNftFilter.All },
+  const tokens = marketplace?.auctionHouses?.map(({ treasuryMint }) =>
+    tokenMap.get(treasuryMint)
+  )
+
+  const { watch, control, getValues } = useForm<NftFilterForm>({
+    defaultValues: {
+      preset: PresetNftFilter.All,
+      tokens: [] as string[],
+    },
   })
+
+  const stats = marketplaceQuery.data?.marketplace.auctionHouses[0].stats
 
   useEffect(() => {
     if (publicKey) {
@@ -377,7 +431,17 @@ function Home({ marketplace }: HomePageProps) {
   }, [publicKey, getWalletCounts])
 
   useEffect(() => {
-    const subscription = watch(({ preset }) => {
+    const subscription = watch(({ preset, tokens }) => {
+      let selectedAuctionHouses = auctionHouses
+      if (
+        preset === PresetNftFilter.Listed &&
+        tokens?.some((t) => t !== undefined)
+      ) {
+        selectedAuctionHouses = marketplace.auctionHouses
+          ?.filter(({ treasuryMint }) => tokens?.includes(treasuryMint))
+          .map(({ address }) => address) as string[]
+      }
+
       const pubkey = publicKey?.toBase58()
 
       const owners = ifElse(
@@ -401,7 +465,7 @@ function Home({ marketplace }: HomePageProps) {
       nftsQuery
         .refetch({
           creators,
-          auctionHouses: [marketplace.auctionHouse.address],
+          auctionHouses: selectedAuctionHouses,
           owners,
           offerers,
           listed,
@@ -427,10 +491,10 @@ function Home({ marketplace }: HomePageProps) {
   const loading =
     creatorsQuery.loading ||
     marketplaceQuery.loading ||
-    nftsQuery.loading ||
     nftCountsQuery.loading ||
     walletCountsQuery.loading ||
-    priceChartDataQuery.loading
+    priceChartDataQuery.loading ||
+    loadingTokens
 
   return (
     <>
@@ -467,10 +531,7 @@ function Home({ marketplace }: HomePageProps) {
                 <div className="block bg-gray-800 w-20 h-6 rounded" />
               ) : (
                 <span className="sol-amount text-xl font-semibold">
-                  {toSOL(
-                    (marketplaceQuery.data?.marketplace.auctionHouse.stats?.floor.toNumber() ||
-                      0) as number
-                  )}
+                  {toSOL((stats?.floor?.toNumber() || 0) as number)}
                 </span>
               )}
             </div>
@@ -482,10 +543,7 @@ function Home({ marketplace }: HomePageProps) {
                 <div className="block bg-gray-800 w-20 h-6 rounded" />
               ) : (
                 <span className="sol-amount text-xl font-semibold">
-                  {toSOL(
-                    (marketplaceQuery.data?.marketplace.auctionHouse.stats?.volume24hr.toNumber() ||
-                      0) as number
-                  )}
+                  {toSOL((stats?.volume24hr?.toNumber() || 0) as number)}
                 </span>
               )}
             </div>
@@ -514,7 +572,7 @@ function Home({ marketplace }: HomePageProps) {
                     height={120}
                     showXAxis={false}
                     className="w-full"
-                    chartData={priceChartDataQuery.data?.charts.salesAverage}
+                    chartData={priceChartDataQuery.data?.charts?.salesAverage}
                   />
                 )}
               </div>
@@ -683,41 +741,94 @@ function Home({ marketplace }: HomePageProps) {
                       control={control}
                       name="preset"
                       render={({ field: { value, onChange } }) => (
-                        <label
-                          htmlFor="preset-listed"
-                          className={cx(
-                            'flex items-center w-full px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800',
-                            {
-                              'bg-gray-800': loading,
-                            }
-                          )}
-                        >
-                          <input
-                            onChange={onChange}
-                            className="mr-3 appearance-none rounded-full h-3 w-3 
+                        <>
+                          <label
+                            htmlFor="preset-listed"
+                            className={cx(
+                              'flex items-center w-full px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800',
+                              {
+                                'bg-gray-800': loading,
+                              }
+                            )}
+                          >
+                            <input
+                              onChange={onChange}
+                              className="mr-3 appearance-none rounded-full h-3 w-3 
                                 border border-gray-100 bg-gray-700 
                                 checked:bg-gray-100 focus:outline-none bg-no-repeat bg-center bg-contain"
-                            disabled={loading}
-                            hidden={loading}
-                            type="radio"
-                            name="preset"
-                            value={PresetNftFilter.Listed}
-                            id="preset-listed"
-                          />
-                          {loading ? (
-                            <div className="h-6 w-full" />
-                          ) : (
-                            <div className="w-full flex justify-between">
-                              <div>Current listings</div>
-                              <div className="text-gray-300">
-                                {nftCountsQuery.data?.nftCounts.listed}
+                              disabled={loading}
+                              hidden={loading}
+                              type="radio"
+                              name="preset"
+                              value={PresetNftFilter.Listed}
+                              id="preset-listed"
+                            />
+                            {loading ? (
+                              <div className="h-6 w-full" />
+                            ) : (
+                              <div className="w-full flex justify-between">
+                                <div>Current listings</div>
+                                <div className="text-gray-300">
+                                  {nftCountsQuery.data?.nftCounts.listed}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </label>
+                            )}
+                          </label>
+                        </>
                       )}
                     />
                   </li>
+                  {getValues().preset === PresetNftFilter.Listed &&
+                    tokens.map((token, index) => (
+                      <li key={token?.address}>
+                        <Controller
+                          control={control}
+                          name={`tokens.${index}`}
+                          render={({ field: { value, onChange } }) => (
+                            <label
+                              htmlFor={token?.address}
+                              className={cx(
+                                'flex items-center w-full px-4 py-2 rounded-md cursor-pointer hover:bg-gray-800',
+                                {
+                                  'bg-gray-800': loading,
+                                }
+                              )}
+                            >
+                              <input
+                                onChange={(event) => {
+                                  onChange(
+                                    event.target.checked
+                                      ? token?.address
+                                      : undefined
+                                  )
+                                }}
+                                className="ml-4 mr-3 appearance-none rounded-sm h-3 w-3 focus:outline-none 
+                                border border-gray-100 bg-no-repeat bg-center bg-contain bg-gray-700 
+                                checked:bg-gray-100"
+                                disabled={loading}
+                                hidden={loading}
+                                type="checkbox"
+                                checked={value === token?.address}
+                                value={token?.address}
+                                id={token?.address}
+                              />
+                              {loading ? (
+                                <div className="h-6 w-full" />
+                              ) : (
+                                <div className="w-full flex justify-between">
+                                  <div>{token?.name}</div>
+                                  <div className="text-gray-300">
+                                    {listedCountQueryMap.get(
+                                      token?.address ?? ''
+                                    )?.data?.nftCounts.listed ?? 0}
+                                  </div>
+                                </div>
+                              )}
+                            </label>
+                          )}
+                        />
+                      </li>
+                    ))}
                   {connected && (
                     <>
                       <li>
@@ -815,7 +926,7 @@ function Home({ marketplace }: HomePageProps) {
           <div className="grow">
             <List
               data={nftsQuery.data?.nfts}
-              loading={loading}
+              loading={loading || nftsQuery.loading}
               loadingComponent={<NftCard.Skeleton />}
               hasMore={hasMore}
               onLoadMore={async (inView) => {
@@ -855,6 +966,7 @@ function Home({ marketplace }: HomePageProps) {
                       <NftCard
                         nft={nft}
                         marketplace={marketplace}
+                        tokenMap={tokenMap}
                         moonrank={undefined}
                         howrareis={undefined}
                       />

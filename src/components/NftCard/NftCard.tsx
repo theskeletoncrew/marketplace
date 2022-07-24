@@ -1,15 +1,33 @@
 import { useWallet } from '@solana/wallet-adapter-react'
 import { PublicKey } from '@solana/web3.js'
-import { equals, find, not, pipe, prop, when, isNil, always } from 'ramda'
+import {
+  equals,
+  find,
+  not,
+  pipe,
+  prop,
+  when,
+  isNil,
+  always,
+  map,
+  isEmpty,
+  ifElse,
+  view,
+  flip,
+  includes,
+  lensPath,
+} from 'ramda'
 import React from 'react'
 import Link from 'next/link'
-import { addressAvatar } from 'src/modules/address'
-import { toSOL } from './../../modules/lamports'
-import { Listing, Marketplace, Nft } from './../../types'
+import { addressAvatar } from '../../modules/address'
+import { AhListing, Marketplace, Nft } from '@holaplex/marketplace-js-sdk'
+import Price from '../Price'
+import { TokenInfo } from '@solana/spl-token-registry'
 
 interface NftCardProps {
   nft: Nft
   marketplace: Marketplace
+  tokenMap: Map<string, TokenInfo>
   moonrank?: number
   howrareis?: number
 }
@@ -17,14 +35,24 @@ interface NftCardProps {
 export const NftCard = ({
   nft,
   marketplace,
+  tokenMap,
   moonrank,
   howrareis,
 }: NftCardProps) => {
   const { publicKey } = useWallet()
-  const listing = find<Listing>(
-    pipe(prop('auctionHouse'), equals(marketplace.auctionHouse.address))
-  )(nft.listings)
-
+  const marketplaceAuctionHouseAddresses = map(prop('address'))(
+    marketplace.auctionHouses
+  )
+  const listing = ifElse(
+    isEmpty,
+    always(null),
+    find<AhListing>(
+      pipe(
+        view(lensPath(['auctionHouse', 'address'])),
+        flip(includes)(marketplaceAuctionHouseAddresses)
+      )
+    )
+  )(nft.listings || [])
   const isOwner = equals(nft.owner?.address, publicKey?.toBase58())
 
   return (
@@ -35,7 +63,7 @@ export const NftCard = ({
           className="w-full aspect-square object-cover"
           src={nft.image as string}
         />
-        {nft.offers.length > 0 && (
+        {nft.offers && nft.offers.length > 0 && (
           <div className="absolute top-3 left-3 text-xs rounded-full py-1 px-2 bg-black bg-opacity-60">
             {nft.offers.length} {nft.offers.length == 1 ? 'Offer' : 'Offers'}
           </div>
@@ -91,12 +119,11 @@ export const NftCard = ({
         <footer className="flex justify-center lg:justify-end items-center gap-2 px-4 h-12 sm:h-16 lg:h-20 border-t-gray-800 border-t-2">
           <div className="flex-grow sm:flex-1 mr-auto text-sm sm:text-base text-center lg:text-left">
             <p className="label hidden lg:block">Price</p>
-            <p className="font-semibold inline lg:block">
-              <span className="inline lg:hidden pr-2">Price</span>
-              <span className="icon-sol">
-                {toSOL(listing.price.toNumber())}
-              </span>
-            </p>
+            <Price
+              price={listing.price.toNumber()}
+                token={tokenMap.get(listing.auctionHouse.treasuryMint)}
+              style={'font-semibold'}
+            />
           </div>
           {not(isOwner) && (
             <Link href={`/nfts/${nft.address}`}>

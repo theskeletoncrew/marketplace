@@ -1,24 +1,22 @@
-import { ReactElement, useState } from 'react'
+import { ReactElement, useEffect, useMemo, useState } from 'react'
 import { NextPageContext } from 'next'
 import { gql } from '@apollo/client'
-import { isNil } from 'ramda'
+import { isNil, pipe, zip, map, forEach, values } from 'ramda'
+import { TokenInfo } from '@solana/spl-token-registry'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { toast } from 'react-toastify'
 import { AppProps } from 'next/app'
 import client from './../../../client'
-import Button, { ButtonSize, ButtonType } from '../../../components/Button'
-import { Marketplace } from './../../../types.d'
-import { useLogin } from '../../../hooks/login'
-
-import { Transaction, PublicKey } from '@solana/web3.js'
-import { AuctionHouseProgram } from '@metaplex-foundation/mpl-auction-house'
+import { initMarketplaceSDK, Marketplace } from '@holaplex/marketplace-js-sdk'
 import AdminMenu, { AdminMenuItemType } from '../../../components/AdminMenu'
 import { AdminLayout } from '../../../layouts/Admin'
+import { Wallet } from '@metaplex/js'
+import { AuctionHouse } from '@holaplex/marketplace-js-sdk/dist/types'
+import { useTokenList } from 'src/hooks/tokenList'
+import Price from 'src/components/Price'
+import { EmptyTreasuryWalletForm } from './../../../components/EmptyTreasuryWalletForm'
 
 const SUBDOMAIN = process.env.MARKETPLACE_SUBDOMAIN
 
-const { createWithdrawFromTreasuryInstruction } =
-  AuctionHouseProgram.instructions
 interface GetMarketplace {
   marketplace: Marketplace | null
 }
@@ -43,7 +41,7 @@ export async function getServerSideProps({ req }: NextPageContext) {
             creatorAddress
             storeConfigAddress
           }
-          auctionHouse {
+          auctionHouses {
             address
             treasuryMint
             auctionHouseTreasury
@@ -85,86 +83,49 @@ interface AdminEditFinancialsProps extends AppProps {
 }
 
 const AdminEditFinancials = ({ marketplace }: AdminEditFinancialsProps) => {
-  const wallet = useWallet()
   const { connection } = useConnection()
-  const { publicKey, signTransaction } = wallet
+  const wallet = useWallet()
+  const [loadingBalances, setLoadinBalances] = useState(true)
+  const [tokenMap, loadingTokens] = useTokenList()
+  const [balances, setBalances] = useState<{
+    [auctionHouse: string]: [AuctionHouse, TokenInfo | undefined, number]
+  }>({})
+  const sdk = useMemo(
+    () => initMarketplaceSDK(connection, wallet as Wallet),
+    [connection, wallet]
+  )
 
-  const login = useLogin()
-
-  const [withdrawlLoading, setWithdrawlLoading] = useState(false)
-
-  const payoutFunds = async () => {
-    if (!publicKey || !signTransaction || !wallet) {
-      toast.error('Wallet not connected')
-
-      login()
-
+  useEffect(() => {
+    if (!marketplace.auctionHouses || loadingTokens) {
       return
     }
 
-    const auctionHouse = new PublicKey(marketplace.auctionHouse.address)
-    const authority = new PublicKey(marketplace.auctionHouse.authority)
-    const treasuryMint = new PublicKey(marketplace.auctionHouse.treasuryMint)
-    const auctionHouseTreasury = new PublicKey(
-      marketplace.auctionHouse.auctionHouseTreasury
-    )
+    ;(async () => {
+      const next = { ...balances }
 
-    const treasuryWithdrawalDestination = new PublicKey(
-      marketplace.auctionHouse.treasuryWithdrawalDestination
-    )
-
-    const auctionHouseTreasuryBalance = await connection.getBalance(
-      auctionHouseTreasury
-    )
-
-    const withdrawFromTreasuryInstructionAccounts = {
-      treasuryMint,
-      authority,
-      treasuryWithdrawalDestination,
-      auctionHouseTreasury,
-      auctionHouse,
-    }
-    const withdrawFromTreasuryInstructionArgs = {
-      amount: auctionHouseTreasuryBalance,
-    }
-
-    const withdrawFromTreasuryInstruction =
-      createWithdrawFromTreasuryInstruction(
-        withdrawFromTreasuryInstructionAccounts,
-        withdrawFromTreasuryInstructionArgs
+      const amounts = await Promise.all(
+        marketplace.auctionHouses.map((auctionHouse) => {
+          return sdk.treasury(auctionHouse).balance()
+        })
       )
 
-    const txt = new Transaction()
+      pipe(
+        zip(marketplace.auctionHouses),
+        forEach(([auctionHouse, balance]: [AuctionHouse, number]) => {
+          next[auctionHouse.address] = [
+            auctionHouse,
+            tokenMap.get(auctionHouse.treasuryMint),
+            balance,
+          ]
+        })
+      )(amounts)
 
-    txt.add(withdrawFromTreasuryInstruction)
+      setBalances(next)
+      setLoadinBalances(false)
+    })()
+  }, [marketplace.auctionHouses, loadingTokens])
 
-    txt.recentBlockhash = (await connection.getRecentBlockhash()).blockhash
-    txt.feePayer = publicKey
-
-    let signed: Transaction | undefined = undefined
-
-    try {
-      signed = await signTransaction(txt)
-    } catch (e: any) {
-      toast.error(e.message)
-      return
-    }
-
-    let signature: string | undefined = undefined
-
-    try {
-      toast('Sending the transaction to Solana.')
-      setWithdrawlLoading(true)
-      signature = await connection.sendRawTransaction(signed.serialize())
-
-      await connection.confirmTransaction(signature, 'confirmed')
-
-      toast.success('The transaction was confirmed.')
-    } catch (e) {
-      toast.error(e.message)
-    }
-    setWithdrawlLoading(false)
-  }
+  const loading = loadingBalances || loadingTokens
 
   return (
     <div className="w-full">
@@ -190,24 +151,71 @@ const AdminEditFinancials = ({ marketplace }: AdminEditFinancialsProps) => {
           </div>
           <div className="flex flex-col items-center w-full pb-16 grow">
             <div className="w-full max-w-3xl">
-              <div className="grid items-start grid-cols-12 mb-10 md:mb-0 md:flex-row md:justify-between">
-                <div className="w-full mb-4 col-span-full md:col-span-6 lg:col-span-8">
-                  <h2>Financials</h2>
-                  <p className="text-gray-300">
-                    Manage the finances of this marketplace.
-                  </p>
+              <div className="flex-col mb-10 md:mb-0">
+                <div className="w-full mb-4">
+                  <h2>Transaction fees collected</h2>
                 </div>
-                <div className="flex justify-end col-span-full md:col-span-6 lg:col-span-4">
-                  <Button
-                    block
-                    onClick={payoutFunds}
-                    type={ButtonType.Primary}
-                    size={ButtonSize.Small}
-                    loading={withdrawlLoading}
-                  >
-                    Claim Funds
-                  </Button>
-                  &nbsp;&nbsp;
+                <div className="grid grid-cols-12 gap-4">
+                  {loading ? (
+                    <>
+                      <div className="bg-gray-800 h-14 w-full rounded-md col-span-12" />
+                      <div className="bg-gray-800 h-14 w-full rounded-md col-span-12" />
+                      <div className="bg-gray-800 h-14 w-full rounded-md col-span-12" />
+                    </>
+                  ) : (
+                    pipe(
+                      values,
+                      map(
+                        ([auctionHouse, token, amount]: [
+                          AuctionHouse,
+                          TokenInfo | undefined,
+                          number
+                        ]) => {
+                          return (
+                            <div
+                              className="col-span-12 flex justify-between"
+                              key={auctionHouse.treasuryMint}
+                            >
+                              <div>
+                                <span className="text-gray-300 uppercase font-semibold text-xs">
+                                  {token?.symbol} Unredeemed
+                                </span>
+                                <Price
+                                  price={amount}
+                                  token={token}
+                                  style="text-lg font-semibold"
+                                />
+                              </div>
+                              <EmptyTreasuryWalletForm
+                                onEmpty={async () => {
+                                  await sdk
+                                    .transaction()
+                                    .add(
+                                      sdk
+                                        .treasury(auctionHouse)
+                                        .withdraw({ amount })
+                                    )
+                                    .send()
+
+                                  const next = { ...balances }
+
+                                  next[auctionHouse.address] = [
+                                    auctionHouse,
+                                    token,
+                                    0,
+                                  ]
+
+                                  setBalances(next)
+                                }}
+                                token={token}
+                              />
+                            </div>
+                          )
+                        }
+                      )
+                    )(balances)
+                  )}
+                  {}
                 </div>
               </div>
             </div>
