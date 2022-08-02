@@ -70,7 +70,7 @@ export const DropCard = ({ drop }: DropCardProps) => {
                 ? drop.quantity > 1
                   ? 'SOLD OUT'
                   : 'SOLD'
-                : 'View'}
+                : 'BUY'}
             </button>
           </a>
         ) : drop.startDate ? (
